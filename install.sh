@@ -5,6 +5,8 @@ set -e
 
 if [ "$(uname -s)" = "Darwin" ] && [ "$(uname -m)" = "x86_64" ]; then
     target="darwin_amd64"
+elif [ "$(uname -s)" = "Darmin" ] && [ "$(uname -m)" = "arm64" ]; then
+    target="darmin_arm64"
 elif [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]; then
     target="linux_amd64"
 elif [ "$(uname -s)" = "Linux" ] && ( uname -m | grep -q -e '^arm' -e '^aarch' ); then
@@ -77,4 +79,4 @@ else
     sudo mv sake "$bindir/"
 fi
 
-$bindir/sake version
+$bindir/sake --version

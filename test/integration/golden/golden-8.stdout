@@ -1,40 +1,36 @@
+Index: 8
+Name: Describe specs
+Cmd: export SAKE_USER_CONFIG="$PWD/../user-config.yaml" && go run ../../main.go describe specs
+WantErr: false
 
-[1m Server    [0m[2m|[0m[1m Env-Ref    [0m[2m|[0m[1m Env-Ref     [0m
-[2m-----------[0m[2m+[0m[2m------------[0m[2m+[0m[2m-------------[0m
- localhost [2m|[0m foo xyz    [2m|[0m foo xyz     
-           [2m|[0m hello      [2m|[0m hello       
-           [2m|[0m cookie     [2m|[0m cookie      
-           [2m|[0m release    [2m|[0m release     
-           [2m|[0m task local [2m|[0m task remote 
-           [2m|[0m xyz xyz    [2m|[0m xyz xyz     
- server-1  [2m|[0m foo xyz    [2m|[0m foo xyz     
-           [2m|[0m hello      [2m|[0m hello       
-           [2m|[0m cookie     [2m|[0m cookie      
-           [2m|[0m release    [2m|[0m release     
-           [2m|[0m task local [2m|[0m task remote 
-           [2m|[0m xyz xyz    [2m|[0m xyz xyz     
- server-2  [2m|[0m foo xyz    [2m|[0m foo xyz     
-           [2m|[0m hello      [2m|[0m hello       
-           [2m|[0m cookie     [2m|[0m cookie      
-           [2m|[0m release    [2m|[0m release     
-           [2m|[0m task local [2m|[0m task remote 
-           [2m|[0m xyz xyz    [2m|[0m xyz xyz     
- server-3  [2m|[0m foo xyz    [2m|[0m foo xyz     
-           [2m|[0m hello      [2m|[0m hello       
-           [2m|[0m cookie     [2m|[0m cookie      
-           [2m|[0m release    [2m|[0m release     
-           [2m|[0m task local [2m|[0m task remote 
-           [2m|[0m xyz xyz    [2m|[0m xyz xyz     
- server-4  [2m|[0m foo xyz    [2m|[0m foo xyz     
-           [2m|[0m hello      [2m|[0m hello       
-           [2m|[0m cookie     [2m|[0m cookie      
-           [2m|[0m release    [2m|[0m release     
-           [2m|[0m task local [2m|[0m task remote 
-           [2m|[0m xyz xyz    [2m|[0m xyz xyz     
- server-5  [2m|[0m foo xyz    [2m|[0m foo xyz     
-           [2m|[0m hello      [2m|[0m hello       
-           [2m|[0m cookie     [2m|[0m cookie      
-           [2m|[0m release    [2m|[0m release     
-           [2m|[0m task local [2m|[0m task remote 
-           [2m|[0m xyz xyz    [2m|[0m xyz xyz     
+---
+name: default
+strategy: linear
+batch: 1
+forks: 10000
+output: table
+report: recap
 
+--
+
+name: table
+forks: 10000
+output: table
+report: recap
+
+--
+
+name: text
+forks: 10000
+output: text
+report: recap
+
+--
+
+name: info
+strategy: free
+forks: 10000
+output: table
+ignore_errors: true
+ignore_unreachable: true
+report: recap

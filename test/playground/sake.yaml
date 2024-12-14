@@ -1,52 +1,302 @@
+import:
+  - ./tasks/tasks.yaml
+
 known_hosts_file: known_hosts
+disable_verify_host: true
 
 servers:
   localhost:
     desc: localhost
-    host: localhost
+    host: 0.0.0.0
     local: true
     tags: [local]
-    work_dir: /opt
+
+  # performance:
+  #   user: test
+  #   identity_file: ../keys/id_ed25519_pem_no
+  #   inventory: |
+  #     num_hosts=$((9999 + $SAKE_NUM_HOSTS))
+  #     for port in $(seq 10000 $num_hosts); do echo "0.0.0.0:$port"; done
+  #   env:
+  #     SAKE_NUM_HOSTS: 1
+
+  list:
+    desc: many hosts using list of hosts
+    hosts:
+      - 172.24.2.2
+      - 172.24.2.4
+      - 172.24.2.5
+      - 172.24.2.6
+      - 172.24.2.7
+    user: test
+    identity_file: ../keys/id_ed25519_pem
+    password: testing
+    tags: [remote, pi, many, list, 'hej san']
+    env:
+      hello: world
+      host: 172.24.2.4
+
+  range:
+    desc: many hosts using range
+    hosts: 172.24.2.[4:6:1]
+    user: test
+    identity_file: ../keys/id_ed25519_pem_no
+    tags: [remote, pi, many, range]
+    env:
+      hello: world
+      host: 172.24.2.4
+
+  inv:
+    desc: many hosts using inventory
+    inventory: ./inventory.sh $opt
+    user: test
+    identity_file: ../keys/id_ed25519_pem_no
+    tags: [remote, pi, many, inv]
+    env:
+      hello: world
+      hosts: 172.24.2.4
 
   server-1:
-    desc: hosts mealie, node-red
-    host: server-1.lan
-    tags: [remote, pi]
-    work_dir: /home/samir
+    desc: server-1 desc
+    host: sake-resolve
+    tags: [remote, pi, bastion]
+    work_dir: /tmp
 
-  pihole:
-    desc: runs pihole
-    host: pihole.lan
-    tags: [remote, pi]
+  server-2:
+    desc: server-2 desc
+    host: sake-resolve
+    tags: [remote, pi, bastion]
+
+  server-3:
+    desc: server-3 desc
+    host: 172.24.2.4
+    user: test
+    identity_file: ../keys/id_ed25519_pem_no
+    tags: [remote, pi, pihole]
+    env:
+      FOO: 123
+
+  server-4:
+    desc: server-4 desc
+    host: 172.24.2.5
+    user: test
+    identity_file: ../keys/id_ed25519_pem
+    password: testing
+    tags: [remote, pi, pihole]
+
+  server-5:
+    desc: server-5 desc
+    user: test
+    host: test@172.24.2.10:22
+    bastion: 172.24.2.98:22
+    identity_file: ../keys/id_ed25519_pem
+    password: testing
+    tags: [remote, bastion]
+    work_dir: /tmp
+    env:
+      hello: world
+
+  server-6:
+    desc: server-6 desc
+    user: test
+    host: 172.24.2.11
+    bastions: ['172.24.2.98', '172.24.2.99']
+    identity_file: ../keys/id_ed25519_pem
+    password: testing
+    tags: [remote, bastion]
+    work_dir: /tmp
+    env:
+      hello: world
+
+  server-9:
+    desc: server-9 desc
+    user: test
+    host: 172.24.2.10
+    bastions: [sake-bastion]
+    identity_file: ../keys/id_ed25519_pem
+    password: testing
+    tags: [remote, bastion]
+    work_dir: /tmp
+    env:
+      hello: world
+
+  server-10:
+    desc: server-10 desc
+    user: test
+    host: sake-r
+    # host: test@172.24.2.10:22
+    identity_file: ../keys/id_ed25519_pem
+    password: testing
+    tags: [remote, bastion]
+    work_dir: /tmp
+    env:
+      hello: world
+
+  server-11:
+    desc: server-11 desc
+    host: sake-rr
+    user: test
+    identity_file: ../keys/id_ed25519_pem
+    password: testing
+    tags: [remote, bastion]
+    work_dir: /tmp
+
+  ip6-1:
+    desc: ip6-1 desc
+    host: test@[2001:3984:3989::10]:22
+    user: test
+    password: test
+    tags: [remote, reachable]
+
+  ip6-2:
+    desc: ip6-2 desc
+    host: 2001:3984:3989::11
+    port: 33
+    user: test
+    password: test
+    tags: [remote, reachable]
 
 targets:
   all:
+    desc: Select all
     all: true
 
+  limit:
+    all: true
+    limit: 3
+
+  limit_p:
+    all: true
+    limit: 50
+
+  list:
+    servers: [list]
+
+  regex:
+    regex: 192
+
+  servers:
+    servers: [server-1, server-2]
+
+  tags:
+    tags: [remote, reachable]
+
+  mult:
+    desc: Info
+    all: true
+    regex: 192
+    servers: [server-1, range]
+    tags: [remote]
+    limit: 3
+
 specs:
+  default:
+    output: json
+
   table:
     output: table
+    # describe: true
+    silent: true
 
   text:
     output: text
 
   info:
-      output: table
-      parallel: true
-      ignore_errors: true
-      ignore_unreachable: true
-      any_errors_fatal: false
+    desc: Info
+    output: table
+    ignore_errors: true
+    ignore_unreachable: true
+    any_errors_fatal: false
+
+  linear:
+    desc: Linear
+    strategy: linear
+    # forks: 2
+    batch: 2
+    # batch_p: 50
+    output: text
+    ignore_errors: true
+    ignore_unreachable: false
+    any_errors_fatal: true
+    # max_fail_percentage: 60
+    report: [recap]
+
+  host_pinned:
+    desc: Host Pinned
+    strategy: host_pinned
+    order: sorted
+    # forks: 2
+    batch: 2
+    # batch_p: 50
+    output: text
+    ignore_errors: true
+    ignore_unreachable: true
+    # any_errors_fatal: false
+    max_fail_percentage: 60
+    report: [recap]
+
+  free:
+    desc: Free
+    strategy: free
+    batch: 2
+    # forks: 2
+    output: text
+    ignore_errors: false
+    ignore_unreachable: true
+    # any_errors_fatal: true
+    max_fail_percentage: 60
 
 env:
   VERSION: v0.1.0
   DATE: $(date -u +"%Y-%m-%dT%H:%M:%S%Z")
 
 tasks:
+  hello:
+    name: Hi
+    cmd: echo PONG
+
+  kaka:
+    name: KAKA
+    desc: KAKA DESC
+    cmd: echo 23
+
   ping:
     target: all
+    # spec: host_pinned
+    name: hej
+    desc: foo
+    spec:
+      print: all
+      ignore_errors: true
+      # strategy: free
+    # desc: ping server
+    cmd: echo $S_BASTION
+    # tty: true
+    # tasks:
+    #   - cmd: |
+    #       ps -p $$
+    #   - cmd: pwd
+
+  exit:
+    # name: Exit
     local: true
-    desc: ping server
-    cmd: ping $SAKE_SERVER_HOST -c 2
+    cmd: exit 3
+
+  sleep:
+    desc: sleep for x seconds
+    env:
+      seconds: 2
+    cmd: sleep $seconds & echo done
+
+  info:
+    name: Info
+    desc: print info
+    target: all
+    tasks:
+      - task: print-host
+      - task: print-hostname
+      - task: print-os
+      - task: print-kernel
 
   # Info
   print-host:
@@ -54,7 +304,7 @@ tasks:
     desc: print host
     spec: info
     target: all
-    cmd: echo $SAKE_SERVER_HOST
+    cmd: echo $S_HOST
 
   print-hostname:
     name: Hostname
@@ -80,115 +330,38 @@ tasks:
     target: all
     cmd: uname -r | awk -v FS='-' '{print $1}'
 
-  print-mem:
-    name: Memory
-    desc: print memory stats
-    spec: info
-    target: all
-    cmd: |
-      mem_tot=$(awk '$1 == "MemTotal:" { print $2 / 1024 / 1024 }' /proc/meminfo)
-      mem_tot=$(printf "%.1f" $mem_tot)
-
-      mem_free=$(awk '$1 == "MemAvailable:" { print $2 / 1024 / 1024 }' /proc/meminfo)
-      mem_free=$(printf "%.1f" $mem_free)
-      mem_used=$(echo "$mem_tot-$mem_free" | bc)
-
-      echo "$mem_used / $mem_tot Gb"
-
-  print-cpu:
-    name: CPU
-    desc: print memory stats
-    spec: info
-    target: all
-    cmd: |
-      num_cores=$(nproc --all)
-      cpu_load=$(mpstat 1 2 | awk 'END{print 100-$NF"%"}')
-      echo "$cpu_load, ($num_cores cores)"
-
-  print-disk:
-    name: Disk
-    desc: print disk usage
-    spec: info
-    target: all
-    cmd: |
-      disk=$(/usr/bin/df -BG 2>/dev/null | tail -n +2 | sort -h -k2,2 -r | awk -F " " '{print $1, $2, $3}' | head -n 1)
-
-      tot_disk=$(echo $disk | awk '{print $2}')
-      used_disk=$(echo $disk | awk '{print $3}')
-
-      echo "$used_disk / $tot_disk"
-
-  print-uptime:
-    name: Uptime
-    desc: print uptime
-    spec: info
-    target: all
-    cmd: uptime | grep -E -o "[0-9]* (day|days)"
-
-  info:
-    desc: get remote info
-    spec: info
-    target: all
-
+  register:
     tasks:
-      - task: print-os
-      - task: print-kernel
-      - task: print-disk
-      - task: print-mem
-      - task: print-cpu
-      - task: print-uptime
+      - cmd: echo "foo" && >&2 echo "error"
+        register: out
+      - cmd: |
+          echo "status: $out_status"
+          echo "rc: $out_rc"
+          echo "failed: $out_failed"
+          echo "stdout: $out_stdout"
+          echo "stderr: $out_stderr"
+          echo "out: $out"
 
-  # SSH
-  ssh-and-cmd:
-    desc: run command and ssh to server after
-    attach: true
-    cmd: ls -alh
+      - cmd: echo "xyz" && >&2 echo "error 2"
+        register: out2
+      - cmd: |
+          echo "status: $out_status"
+          echo "rc: $out_rc"
+          echo "failed: $out_failed"
+          echo "stdout: $out_stdout"
+          echo "stderr: $out_stderr"
+          echo "out: $out"
 
-  ssh-tunnel:
-    desc: create ssh tunnel
-    tty: true
-    env:
-      local:
-      remote:
-    cmd: ssh $SAKE_SERVER_USER@$SAKER_SERVER_HOST -N -L $local:localhost:$remote
+          echo "-------------"
 
-  # Script
-  script:
-    desc: run local script on remote server
-    env:
-      file: ""
-    local: true
-    cmd: |
-      file=$(basename $file)
-      temp_file="$(mktemp /tmp/$file.XXXXXXXXX -u)"
-      rsync --compress --recursive --archive --update $file $SAKE_SERVER_HOST:$temp_file
-      ssh $SAKE_SERVER_USER@$SAKE_SERVER_HOST "$temp_file"
-      ssh $SAKE_SERVER_USER@$SAKE_SERVER_HOST "rm $temp_file"
+          echo "status: $out2_status"
+          echo "rc: $out2_rc"
+          echo "failed: $out2_failed"
+          echo "stdout: $out2_stdout"
+          echo "stderr: $out2_stderr"
+          echo "out: $out2"
 
-  # Docker
-  docker-exec:
-    desc: attach to docker container
-    spec: info
-    env:
-      NAME: mealie
-    tty: true
-    cmd: ssh -t $SAKE_SERVER_USER@$SAKE_SERVER_HOST "docker exec -it $NAME bash"
-
-  # Upload / Download
-  upload:
-    desc: upload file or directory
-    spec: info
-    env:
-      src: ""
-      dest: /tmp
-    local: true
-    cmd: rsync --recursive --verbose --archive --update $src $SAKE_SERVER_HOST:$dest
-
-  download:
-    desc: download file or directory
-    spec: info
-    env:
-      src: ""
-      dest: ""
-    local: true
-    cmd: rsync --recursive --verbose --archive --update $SAKE_SERVER_HOST:$src $dest
+  register2:
+    tasks:
+      - cmd: echo "foo" && >&2 echo "error"
+        register: out

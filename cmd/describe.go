@@ -10,8 +10,8 @@ func describeCmd(config *dao.Config, configErr *error) *cobra.Command {
 	cmd := cobra.Command{
 		Aliases: []string{"desc"},
 		Use:     "describe <servers|tasks>",
-		Short:   "Describe servers and tasks",
-		Long:    "Describe servers and tasks.",
+		Short:   "Describe servers, tasks, specs and targets",
+		Long:    "Describe servers, tasks, specs and targets",
 		Example: `  # Describe servers
   sake describe servers
 
@@ -23,6 +23,8 @@ func describeCmd(config *dao.Config, configErr *error) *cobra.Command {
 	cmd.AddCommand(
 		describeServersCmd(config, configErr),
 		describeTasksCmd(config, configErr),
+		describeTargetsCmd(config, configErr),
+		describeSpecsCmd(config, configErr),
 	)
 
 	return &cmd

@@ -2,10 +2,8 @@ package dao
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/alajmo/sake/core"
@@ -31,7 +29,9 @@ func (i *Import) GetContextLine() int {
 // Used for config imports
 type ConfigResources struct {
 	DisableVerifyHost *bool
+	DefaultTimeout    *uint
 	KnownHostsFile    *string
+	Shell             string
 	Imports           []Import
 	Themes            []Theme
 	Specs             []Spec
@@ -84,12 +84,12 @@ func (c *FoundCyclicDependency) Error() string {
 // 2. Perform a depth-first search of imports and collect all specs, targets, themes, tasks, servers and store in intermediate struct ConfigResources
 //   - Nested tasks for tasks are saved as TaskRefYAML
 //   - Spec, Theme, Target are saved as references here as well, if they are specified
-// 3. If the default theme, spec, and target objects are not overwritten, then create them
-//   3.1. Create default Theme collection
-//   3.2. Create default Spec collection
-//   3.3. Create default Target collection
-// 4. Perform a depth-first search for task references and save them as T
-// 5. We check duplicate server hosts in the config collection
+//     3. If the default theme, spec, and target objects are not overwritten, then create them
+//     3.1. Create default Theme collection
+//     3.2. Create default Spec collection
+//     3.3. Create default Target collection
+//     4. Perform a depth-first search for task references and save them as T
+//     5. We check duplicate server hosts in the config collection
 //
 // Given config imports, use a Depth-first-search algorithm to recursively
 // check for resources (tasks, servers, dirs, themes, specs, targets).
@@ -117,9 +117,7 @@ func (c *ConfigYAML) parseConfig() (Config, error) {
 			cr.ConfigErrors = append(cr.ConfigErrors, configError)
 		} else {
 			imports, importErrors := c.ParseImportsYAML()
-			for i := range importErrors {
-				cr.ImportErrors = append(cr.ImportErrors, importErrors[i])
-			}
+			cr.ImportErrors = append(cr.ImportErrors, importErrors...)
 
 			cr.Imports = append(cr.Imports, imports...)
 		}
@@ -151,6 +149,7 @@ func (c *ConfigYAML) parseConfig() (Config, error) {
 	// Create default spec if not exists
 	_, err = cr.GetSpec(DEFAULT_SPEC.Name)
 	if err != nil {
+		// TODO: Fill in all default values for spec
 		cr.Specs = append(cr.Specs, DEFAULT_SPEC)
 	}
 
@@ -161,8 +160,8 @@ func (c *ConfigYAML) parseConfig() (Config, error) {
 	}
 
 	// Process tasks:
-	// Expand references (targets, specs, themes, tasks)
-	// Check for cyclic dependencies for tasks
+	//  - Expand references (targets, specs, themes, tasks)
+	//  - Check for cyclic dependencies for tasks
 	taskCycles := []TaskLink{}
 	for i := range cr.Tasks {
 		if cr.Tasks[i].ThemeRef != "" {
@@ -197,9 +196,12 @@ func (c *ConfigYAML) parseConfig() (Config, error) {
 				ID:      cr.Tasks[i].ID,
 				Name:    cr.Tasks[i].Name,
 				Desc:    cr.Tasks[i].Desc,
+				RootDir: filepath.Dir(cr.Tasks[i].context),
 				WorkDir: cr.Tasks[i].WorkDir,
 				Cmd:     cr.Tasks[i].Cmd,
 				Local:   cr.Tasks[i].Local,
+				Shell:   cr.Tasks[i].Shell,
+				TTY:     cr.Tasks[i].TTY,
 				Envs:    cr.Tasks[i].Envs,
 			}
 			cr.Tasks[i].Tasks = append(cr.Tasks[i].Tasks, taskCmd)
@@ -232,6 +234,16 @@ func (c *ConfigYAML) parseConfig() (Config, error) {
 		config.DisableVerifyHost = *cr.DisableVerifyHost
 	}
 
+	if cr.DefaultTimeout == nil {
+		config.DefaultTimeout = DEFAULT_TIMEOUT
+	} else {
+		config.DefaultTimeout = *cr.DefaultTimeout
+	}
+
+	if cr.Shell != "" {
+		config.Shell = cr.Shell
+	}
+
 	if cr.KnownHostsFile == nil {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -244,14 +256,13 @@ func (c *ConfigYAML) parseConfig() (Config, error) {
 		config.KnownHostsFile = *cr.KnownHostsFile
 	}
 
-	// Check duplicate hosts
-	hostErr := checkDuplicateHosts(config.Servers)
-
 	// Check duplicate imports
 	importErr := checkDuplicateImports(cr.Imports)
 
+	duplicateObjects := checkDuplicateObjects(config)
+
 	// Concat errors
-	errString := concatErrors(hostErr, importErr, cr, &importCycles, &taskCycles)
+	errString := concatErrors(importErr, duplicateObjects, cr, &importCycles, &taskCycles)
 
 	if errString != "" {
 		return config, &core.ConfigErr{Msg: errString}
@@ -260,8 +271,9 @@ func (c *ConfigYAML) parseConfig() (Config, error) {
 	return config, nil
 }
 
-func concatErrors(hostErr string, importErr string, cr ConfigResources, importCycles *[]NodeLink, taskCycles *[]TaskLink) string {
-	errString := fmt.Sprintf("%s%s", hostErr, importErr)
+func concatErrors(importErr string, duplicateObjects string, cr ConfigResources, importCycles *[]NodeLink, taskCycles *[]TaskLink) string {
+	errString := importErr
+	errString += duplicateObjects
 
 	if len(*importCycles) > 0 {
 		err := &FoundCyclicDependency{Cycles: *importCycles}
@@ -318,7 +330,7 @@ func concatErrors(hostErr string, importErr string, cr ConfigResources, importCy
 	return errString
 }
 
-func parseConfigFile(path string, cr *ConfigResources) (ConfigYAML, error) {
+func parseConfigFile(path string) (ConfigYAML, error) {
 	var configYAML ConfigYAML
 
 	absPath, err := filepath.Abs(path)
@@ -332,7 +344,7 @@ func parseConfigFile(path string, cr *ConfigResources) (ConfigYAML, error) {
 	configYAML.Path = absPath
 	configYAML.Dir = filepath.Dir(absPath)
 
-	dat, err := ioutil.ReadFile(absPath)
+	dat, err := os.ReadFile(absPath)
 	if err != nil {
 		return configYAML, &core.FileError{Err: err.Error()}
 	}
@@ -346,6 +358,14 @@ func parseConfigFile(path string, cr *ConfigResources) (ConfigYAML, error) {
 }
 
 func (c *ConfigYAML) loadResources(cr *ConfigResources) {
+	if c.Shell != "" {
+		cr.Shell = c.Shell
+	}
+
+	if c.DefaultTimeout != nil {
+		cr.DefaultTimeout = c.DefaultTimeout
+	}
+
 	if c.DisableVerifyHost != nil {
 		cr.DisableVerifyHost = c.DisableVerifyHost
 	}
@@ -390,9 +410,7 @@ func (c *ConfigYAML) loadResources(cr *ConfigResources) {
 			cr.ConfigErrors = append(cr.ConfigErrors, configError)
 		} else {
 			tasks, taskErrors := c.ParseTasksYAML()
-			for i := range taskErrors {
-				cr.TaskErrors = append(cr.TaskErrors, taskErrors[i])
-			}
+			cr.TaskErrors = append(cr.TaskErrors, taskErrors...)
 			cr.Tasks = append(cr.Tasks, tasks...)
 		}
 	}
@@ -411,9 +429,7 @@ func (c *ConfigYAML) loadResources(cr *ConfigResources) {
 		} else {
 			servers, serverErrors := c.ParseServersYAML()
 			cr.Servers = append(cr.Servers, servers...)
-			for i := range serverErrors {
-				cr.ServerErrors = append(cr.ServerErrors, serverErrors[i])
-			}
+			cr.ServerErrors = append(cr.ServerErrors, serverErrors...)
 		}
 	}
 
@@ -431,9 +447,7 @@ func (c *ConfigYAML) loadResources(cr *ConfigResources) {
 		} else {
 			themes, themeErrors := c.ParseThemesYAML()
 			cr.Themes = append(cr.Themes, themes...)
-			for i := range themeErrors {
-				cr.ThemeErrors = append(cr.ThemeErrors, themeErrors[i])
-			}
+			cr.ThemeErrors = append(cr.ThemeErrors, themeErrors...)
 		}
 	}
 
@@ -451,9 +465,7 @@ func (c *ConfigYAML) loadResources(cr *ConfigResources) {
 		} else {
 			specs, specErrors := c.ParseSpecsYAML()
 			cr.Specs = append(cr.Specs, specs...)
-			for i := range specErrors {
-				cr.SpecErrors = append(cr.SpecErrors, specErrors[i])
-			}
+			cr.SpecErrors = append(cr.SpecErrors, specErrors...)
 		}
 	}
 
@@ -471,9 +483,7 @@ func (c *ConfigYAML) loadResources(cr *ConfigResources) {
 		} else {
 			targets, targetErrors := c.ParseTargetsYAML()
 			cr.Targets = append(cr.Targets, targets...)
-			for i := range targetErrors {
-				cr.TargetErrors = append(cr.TargetErrors, targetErrors[i])
-			}
+			cr.TargetErrors = append(cr.TargetErrors, targetErrors...)
 		}
 	}
 
@@ -558,7 +568,7 @@ func dfsImport(n *Node, m map[string]*Node, cycles *[]NodeLink, cr *ConfigResour
 		}
 
 		// Import raw configYAML
-		configYAML, err := parseConfigFile(nc.Path, cr)
+		configYAML, err := parseConfigFile(nc.Path)
 
 		// Error belongs to config file trying to import the new config
 		if err != nil {
@@ -583,9 +593,7 @@ func dfsImport(n *Node, m map[string]*Node, cycles *[]NodeLink, cr *ConfigResour
 				continue
 			} else {
 				imports, importErrors := configYAML.ParseImportsYAML()
-				for i := range importErrors {
-					cr.ImportErrors = append(cr.ImportErrors, importErrors[i])
-				}
+				cr.ImportErrors = append(cr.ImportErrors, importErrors...)
 				nc.Imports = imports
 			}
 		}
@@ -598,52 +606,6 @@ func dfsImport(n *Node, m map[string]*Node, cycles *[]NodeLink, cr *ConfigResour
 
 	n.Visiting = false
 	n.Visited = true
-}
-
-type FoundDuplicateHosts struct {
-	host    string
-	servers []string
-}
-
-func (c *FoundDuplicateHosts) Error() string {
-	var msg string
-
-	var errPrefix = text.FgRed.Sprintf("error")
-	var ptrPrefix = text.FgBlue.Sprintf("-->")
-	msg = fmt.Sprintf("%s: %s`%s`%s\n  %s", errPrefix, "found duplicate host ", c.host, " for the following servers", ptrPrefix)
-	msg += fmt.Sprintf(" %s\n", c.servers[0])
-	for i, s := range c.servers[1:] {
-		if i < len(c.servers[1:])-1 {
-			msg += fmt.Sprintf("      %s\n", s)
-		} else {
-			msg += fmt.Sprintf("      %s", s)
-		}
-	}
-
-	return msg
-}
-
-func checkDuplicateHosts(servers []Server) string {
-	hostServer := make(map[string][]string)
-	for _, s := range servers {
-		hostServer[s.Host] = append(hostServer[s.Host], s.Name)
-	}
-
-	keys := make([]string, 0, len(hostServer))
-	for k := range hostServer {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	var configErr string
-	for _, k := range keys {
-		if len(hostServer[k]) > 1 {
-			err := &FoundDuplicateHosts{host: k, servers: hostServer[k]}
-			configErr = fmt.Sprintf("%s%s\n\n", configErr, err.Error())
-		}
-	}
-
-	return configErr
 }
 
 type FoundDuplicateImports struct {
@@ -694,13 +656,122 @@ func checkDuplicateImports(imports []Import) string {
 	return errString
 }
 
+type FoundDuplicateObjects struct {
+	Name   string
+	Type   string
+	Values []string
+}
+
+func (c *FoundDuplicateObjects) Error() string {
+	var msg string
+
+	var errPrefix = text.FgRed.Sprintf("error")
+	var ptrPrefix = text.FgBlue.Sprintf("-->")
+	msg = fmt.Sprintf("%s: %s %s %s\n  %s", errPrefix, "found duplicate", c.Type, c.Name, ptrPrefix)
+	msg += fmt.Sprintf(" %s\n", c.Values[0])
+	for i, s := range c.Values[1:] {
+		if i < len(c.Values[1:])-1 {
+			msg += fmt.Sprintf("      %s\n", s)
+		} else {
+			msg += fmt.Sprintf("      %s", s)
+		}
+	}
+
+	return msg
+}
+
+func checkDuplicateObjects(config Config) string {
+	// Task
+	taskIDS := []string{}
+	visitedTasks := make(map[string]bool, 0)
+	tasks := make(map[string][]string, 0)
+	for _, t := range config.Tasks {
+		tasks[t.ID] = append(tasks[t.ID], t.context)
+		_, exists := visitedTasks[t.ID]
+		if !exists {
+			taskIDS = append(taskIDS, t.ID)
+			visitedTasks[t.ID] = true
+		}
+	}
+
+	var errString string
+	for _, id := range taskIDS {
+		if len(tasks[id]) > 1 {
+			err := &FoundDuplicateObjects{Name: id, Type: "task", Values: tasks[id]}
+			errString = fmt.Sprintf("%s%s\n\n", errString, err.Error())
+		}
+	}
+
+	// Spec
+	specIDS := []string{}
+	visitedSpecs := make(map[string]bool, 0)
+	specs := make(map[string][]string, 0)
+	for _, s := range config.Specs {
+		specs[s.Name] = append(specs[s.Name], s.context)
+		_, exists := visitedSpecs[s.Name]
+		if !exists {
+			specIDS = append(specIDS, s.Name)
+			visitedSpecs[s.Name] = true
+		}
+	}
+
+	for _, id := range specIDS {
+		if len(specs[id]) > 1 {
+			err := &FoundDuplicateObjects{Name: id, Type: "spec", Values: specs[id]}
+			errString = fmt.Sprintf("%s%s\n\n", errString, err.Error())
+		}
+	}
+
+	// Target
+	targetIDS := []string{}
+	visitedTargets := make(map[string]bool, 0)
+	targets := make(map[string][]string, 0)
+	for _, t := range config.Targets {
+		targets[t.Name] = append(targets[t.Name], t.context)
+		_, exists := visitedTargets[t.Name]
+		if !exists {
+			targetIDS = append(targetIDS, t.Name)
+			visitedTargets[t.Name] = true
+		}
+	}
+
+	for _, id := range targetIDS {
+		if len(targets[id]) > 1 {
+			err := &FoundDuplicateObjects{Name: id, Type: "target", Values: targets[id]}
+			errString = fmt.Sprintf("%s%s\n\n", errString, err.Error())
+		}
+	}
+
+	// Theme
+	themeIDS := []string{}
+	visitedThemes := make(map[string]bool, 0)
+	themes := make(map[string][]string, 0)
+	for _, t := range config.Themes {
+		themes[t.Name] = append(themes[t.Name], t.context)
+		_, exists := visitedThemes[t.Name]
+		if !exists {
+			themeIDS = append(themeIDS, t.Name)
+			visitedThemes[t.Name] = true
+		}
+	}
+
+	for _, id := range themeIDS {
+		if len(themes[id]) > 1 {
+			err := &FoundDuplicateObjects{Name: id, Type: "theme", Values: themes[id]}
+			errString = fmt.Sprintf("%s%s\n\n", errString, err.Error())
+		}
+	}
+
+	return errString
+}
+
 // Used for config imports
 type TaskResources struct {
 	Tasks      []Task
 	TaskErrors []ResourceErrors[Task]
 }
 
-func (c ConfigResources) GetTask(id string) (*Task, error) {
+func (c *ConfigResources) GetTask(id string) (*Task, error) {
 	for _, task := range c.Tasks {
 		if id == task.ID {
 			return &task, nil
@@ -710,7 +781,7 @@ func (c ConfigResources) GetTask(id string) (*Task, error) {
 	return nil, &core.TaskNotFound{IDs: []string{id}}
 }
 
-func (c ConfigResources) GetTheme(name string) (*Theme, error) {
+func (c *ConfigResources) GetTheme(name string) (*Theme, error) {
 	for _, theme := range c.Themes {
 		if name == theme.Name {
 			return &theme, nil
@@ -720,7 +791,7 @@ func (c ConfigResources) GetTheme(name string) (*Theme, error) {
 	return nil, &core.ThemeNotFound{Name: name}
 }
 
-func (c ConfigResources) GetSpec(name string) (*Spec, error) {
+func (c *ConfigResources) GetSpec(name string) (*Spec, error) {
 	for _, spec := range c.Specs {
 		if name == spec.Name {
 			return &spec, nil
@@ -730,7 +801,7 @@ func (c ConfigResources) GetSpec(name string) (*Spec, error) {
 	return nil, &core.SpecNotFound{Name: name}
 }
 
-func (c ConfigResources) GetTarget(name string) (*Target, error) {
+func (c *ConfigResources) GetTarget(name string) (*Target, error) {
 	for _, target := range c.Targets {
 		if name == target.Name {
 			return &target, nil

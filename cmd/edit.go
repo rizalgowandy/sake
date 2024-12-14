@@ -21,21 +21,23 @@ func editCmd(config *dao.Config, configErr *error) *cobra.Command {
 			case *core.ConfigNotFound:
 				core.CheckIfError(e)
 			default:
-				runEdit(args, *config)
+				runEdit(*config)
 			}
 		},
 		DisableAutoGenTag: true,
 	}
 
 	cmd.AddCommand(
-		editTask(config, configErr),
 		editServer(config, configErr),
+		editTask(config, configErr),
+		editTarget(config, configErr),
+		editSpec(config, configErr),
 	)
 
 	return &cmd
 }
 
-func runEdit(args []string, config dao.Config) {
+func runEdit(config dao.Config) {
 	err := config.EditConfig()
 	core.CheckIfError(err)
 }

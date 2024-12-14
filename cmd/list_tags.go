@@ -8,6 +8,8 @@ import (
 	"github.com/alajmo/sake/core/print"
 )
 
+var tagHeaders = []string{"tag", "server"}
+
 func listTagsCmd(config *dao.Config, configErr *error, listFlags *core.ListFlags) *cobra.Command {
 	var tagFlags core.TagFlags
 
@@ -33,13 +35,15 @@ func listTagsCmd(config *dao.Config, configErr *error, listFlags *core.ListFlags
 		DisableAutoGenTag: true,
 	}
 
-	cmd.Flags().StringSliceVar(&tagFlags.Headers, "headers", []string{"tag", "server"}, "set headers. Available headers: tag, server")
+	cmd.Flags().SortFlags = false
+
+	cmd.Flags().StringSliceVar(&tagFlags.Headers, "headers", tagHeaders, "set headers")
 	err := cmd.RegisterFlagCompletionFunc("headers", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if *configErr != nil {
 			return []string{}, cobra.ShellCompDirectiveDefault
 		}
 
-		validHeaders := []string{"tag", "server"}
+		validHeaders := tagHeaders
 		return validHeaders, cobra.ShellCompDirectiveDefault
 	})
 	core.CheckIfError(err)
@@ -57,10 +61,11 @@ func listTags(
 	core.CheckIfError(err)
 
 	options := print.PrintTableOptions{
-		Output:               listFlags.Output,
-		Theme:                *theme,
-		OmitEmpty:            false,
-		SuppressEmptyColumns: true,
+		Output:           listFlags.Output,
+		Theme:            *theme,
+		OmitEmptyRows:    false,
+		OmitEmptyColumns: true,
+		Resource:         "tag",
 	}
 
 	allTags := config.GetTags()
@@ -76,13 +81,16 @@ func listTags(
 		core.CheckIfError(err)
 
 		if len(tags) > 0 {
-			print.PrintTable("", tags, options, tagFlags.Headers, []string{})
+			err := print.PrintTable(tags, options, tagFlags.Headers, []string{}, true, true)
+			core.CheckIfError(err)
 		}
 	} else {
 		tags, err := config.GetTagAssocations(allTags)
 		core.CheckIfError(err)
 		if len(tags) > 0 {
-			print.PrintTable("", tags, options, tagFlags.Headers, []string{})
+			rows := dao.GetTableData(tags, tagFlags.Headers)
+			err := print.PrintTable(rows, options, tagFlags.Headers, []string{}, true, true)
+			core.CheckIfError(err)
 		}
 	}
 }

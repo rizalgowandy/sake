@@ -1,34 +1,12 @@
+Index: 7
+Name: List servers filter on inventory hosts
+Cmd: export SAKE_USER_CONFIG="$PWD/../user-config.yaml" && go run ../../main.go list servers inv
+WantErr: false
 
-[1m Server    [0m[2m|[0m[1m Env        [0m
-[2m-----------[0m[2m+[0m[2m------------[0m
- localhost [2m|[0m foo xyz    
-           [2m|[0m hello      
-           [2m|[0m cookie     
-           [2m|[0m release    
-           [2m|[0m task local 
- server-1  [2m|[0m foo xyz    
-           [2m|[0m hello      
-           [2m|[0m cookie     
-           [2m|[0m release    
-           [2m|[0m task local 
- server-2  [2m|[0m foo xyz    
-           [2m|[0m hello      
-           [2m|[0m cookie     
-           [2m|[0m release    
-           [2m|[0m task local 
- server-3  [2m|[0m foo xyz    
-           [2m|[0m hello      
-           [2m|[0m cookie     
-           [2m|[0m release    
-           [2m|[0m task local 
- server-4  [2m|[0m foo xyz    
-           [2m|[0m hello      
-           [2m|[0m cookie     
-           [2m|[0m release    
-           [2m|[0m task local 
- server-5  [2m|[0m foo xyz    
-           [2m|[0m hello      
-           [2m|[0m cookie     
-           [2m|[0m release    
-           [2m|[0m task local 
+---
+
+ server | host       | tags                      | desc                       
+--------+------------+---------------------------+----------------------------
+ inv-0  | 172.24.2.2 | remote,prod,inv,reachable | many hosts using inventory 
+ inv-1  | 172.24.2.4 | remote,prod,inv,reachable | many hosts using inventory 
 

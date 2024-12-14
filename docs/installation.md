@@ -15,6 +15,21 @@
   brew install sake
   ```
 
+* via MacPorts
+  ```sh
+  sudo port install sake
+  ```
+
+* via Arch
+  ```sh
+  pacman -S sake
+  ```
+
+* via pkg
+  ```sh
+  pkg install sake
+  ```
+
 * via Go
   ```bash
   go install github.com/alajmo/sake@latest
@@ -22,7 +37,7 @@
 
 ## Building From Source
 
-Requires [go 1.18 or above](https://golang.org/doc/install).
+Requires [go 1.19 or above](https://golang.org/doc/install).
 
 1. Clone the repo
 2. Build and run the executable

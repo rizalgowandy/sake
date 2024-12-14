@@ -1,24 +1,12 @@
+Index: 5
+Name: List servers filter on list hosts
+Cmd: export SAKE_USER_CONFIG="$PWD/../user-config.yaml" && go run ../../main.go list servers list
+WantErr: false
 
-[1mTASK[0m [1mping[0m: ping server
+---
 
-[32mlocalhost | [0mpong
+ server | host       | tags                       | desc                  
+--------+------------+----------------------------+-----------------------
+ list-0 | 172.24.2.2 | remote,prod,list,reachable | many hosts using list 
+ list-1 | 172.24.2.4 | remote,prod,list,reachable | many hosts using list 
 
-[1mTASK[0m [1mping[0m: ping server
-
-[34m172.24.2.1 | [0mpong
-
-[1mTASK[0m [1mping[0m: ping server
-
-[31m172.24.2.2 | [0mpong
-
-[1mTASK[0m [1mping[0m: ping server
-
-[33m172.24.2.3 | [0mpong
-
-[1mTASK[0m [1mping[0m: ping server
-
-[35m172.24.2.4 | [0mpong
-
-[1mTASK[0m [1mping[0m: ping server
-
-[36m172.24.2.5 | [0mpong

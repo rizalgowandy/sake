@@ -82,7 +82,7 @@ func EvaluateEnv(envList []string) ([]string, error) {
 			kv[1] = strings.TrimPrefix(kv[1], "$(")
 			kv[1] = strings.TrimSuffix(kv[1], ")")
 
-			cmd := exec.Command("sh", "-c", kv[1])
+			cmd := exec.Command("bash", "-c", kv[1])
 			cmd.Env = os.Environ()
 			out, err := cmd.CombinedOutput()
 			if err != nil {
@@ -106,6 +106,10 @@ func MergeEnvs(envs ...[]string) []string {
 
 	for _, part := range envs {
 		for _, elem := range part {
+			if elem == "" {
+				continue
+			}
+
 			elem = strings.TrimSuffix(elem, "\n")
 
 			kv := strings.SplitN(elem, "=", 2)
@@ -165,7 +169,7 @@ func EvaluatePassword(password string) (string, error) {
 		password = strings.TrimPrefix(password, "$(")
 		password = strings.TrimSuffix(password, ")")
 
-		cmd := exec.Command("sh", "-c", password)
+		cmd := exec.Command("bash", "-c", password)
 		cmd.Env = os.Environ()
 		out, err := cmd.CombinedOutput()
 		if err != nil {

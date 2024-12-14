@@ -33,6 +33,14 @@ func (c *PasswordEvalFailed) Error() string {
 	return fmt.Sprintf("failed to evaluate password %s", c.Err)
 }
 
+type InventoryEvalFailed struct {
+	Err string
+}
+
+func (c *InventoryEvalFailed) Error() string {
+	return fmt.Sprintf("failed to run inventory command %s", c.Err)
+}
+
 type TagNotFound struct {
 	Tags []string
 }
@@ -40,6 +48,24 @@ type TagNotFound struct {
 func (c *TagNotFound) Error() string {
 	tags := "`" + strings.Join(c.Tags, "`, `") + "`"
 	return fmt.Sprintf("cannot find tags %s", tags)
+}
+
+type TargetsNotFound struct {
+	Targets []string
+}
+
+func (c *TargetsNotFound) Error() string {
+	targets := "`" + strings.Join(c.Targets, "`, `") + "`"
+	return fmt.Sprintf("cannot find targets %s", targets)
+}
+
+type SpecsNotFound struct {
+	Specs []string
+}
+
+func (c *SpecsNotFound) Error() string {
+	specs := "`" + strings.Join(c.Specs, "`, `") + "`"
+	return fmt.Sprintf("cannot find specs %s", specs)
 }
 
 type ServerNotFound struct {
@@ -66,6 +92,106 @@ type TaskMultipleDef struct {
 
 func (c *TaskMultipleDef) Error() string {
 	return fmt.Sprintf("can only define one of the following for task `%s`: cmd, task, tasks", c.Name)
+}
+
+type LimitMultipleDef struct {
+	Name string
+}
+
+func (c *LimitMultipleDef) Error() string {
+	if c.Name != "" {
+		return fmt.Sprintf("can only define one of the following for target `%s`: limit, limit_p", c.Name)
+	}
+
+	return "can only define one of the following for target: limit, limit_p"
+}
+
+type MultipleFailSet struct {
+	Name string
+}
+
+func (c *MultipleFailSet) Error() string {
+	if c.Name != "" {
+		return fmt.Sprintf("can only define either `any_errors_fatal` or `max_fail_percentage` but not both spec `%s`", c.Name)
+	}
+
+	return "can only define either `any_errors_fatal` or `max_fail_percentage` but not both spec"
+}
+
+type BatchMultipleDef struct {
+	Name string
+}
+
+func (c *BatchMultipleDef) Error() string {
+	if c.Name != "" {
+		return fmt.Sprintf("can only define one of the following for spec `%s`: batch, batch_p", c.Name)
+	}
+
+	return "can only define one of the following for spec: batch, batch_p"
+}
+
+type ZeroNotAllowed struct {
+	Name string
+}
+
+func (c *ZeroNotAllowed) Error() string {
+	return fmt.Sprintf("invalid value for %s, cannot be 0", c.Name)
+}
+
+type InvalidPercentInput struct {
+	Name string
+}
+
+func (c *InvalidPercentInput) Error() string {
+	return fmt.Sprintf("percentage can only be between 0 and 100 for property `%s`", c.Name)
+}
+
+type InvalidPercentInput2 struct {
+	Name string
+}
+
+func (c *InvalidPercentInput2) Error() string {
+	return fmt.Sprintf("percentage can only be between 1 and 100 for property `%s`", c.Name)
+}
+
+type RegisterInvalidName struct {
+	Value string
+}
+
+func (c *RegisterInvalidName) Error() string {
+	return fmt.Sprintf("invalid register variable name '%s', only alphanumeric characters and underscore are allowed and variable cannot start with a digit", c.Value)
+}
+
+type ServerMultipleDef struct {
+	Name string
+}
+
+func (c *ServerMultipleDef) Error() string {
+	return fmt.Sprintf("can only define one of the following for server `%s`: host, hosts", c.Name)
+}
+
+type ServerBastionMultipleDef struct {
+	Name string
+}
+
+func (c *ServerBastionMultipleDef) Error() string {
+	return fmt.Sprintf("can only define one of the following for server `%s`: bastion, bastions", c.Name)
+}
+
+type TaskRefMultipleDef struct {
+	Name string
+}
+
+func (c *TaskRefMultipleDef) Error() string {
+	return fmt.Sprintf("found `task` and `cmd` definition for sub tasks in task `%s`", c.Name)
+}
+
+type NoTaskRefDefined struct {
+	Name string
+}
+
+func (c *NoTaskRefDefined) Error() string {
+	return fmt.Sprintf("found no `task` or `cmd` definition for sub-task in task `%s`", c.Name)
 }
 
 type ThemeNotFound struct {
@@ -128,16 +254,42 @@ func (c *NoEditorEnv) Error() string {
 	return "no environment variable `EDITOR` found"
 }
 
+// If there's a misconfiguration with golang templates (prefix/header for instance in text.go)
+type TemplateParseError struct {
+	Msg string
+}
+
+func (f *TemplateParseError) Error() string {
+	return fmt.Sprintf("failed to parse %s", f.Msg)
+}
+
+// If there's a misconfiguration somewhere, not associated with server errors
+type ExecError struct {
+	Err      error
+	ExitCode int
+}
+
+func (e *ExecError) Error() string {
+	return ""
+}
+
 func CheckIfError(err error) {
 	if err != nil {
-		switch err.(type) {
-		case *ConfigErr:
-			// Errors are already mapped with `error:` prefix
-			fmt.Fprintf(os.Stderr, "%v", err)
-			os.Exit(1)
-		default:
-			fmt.Fprintf(os.Stderr, "%s: %v\n", text.FgRed.Sprintf("error"), err)
-			os.Exit(1)
-		}
+		Exit(err)
+	}
+}
+
+func Exit(err error) {
+	switch err := err.(type) {
+	case *ConfigErr:
+		// Errors are already mapped with `error:` prefix
+		fmt.Fprintf(os.Stderr, "%v", err)
+		os.Exit(1)
+	case *ExecError:
+		// Don't print anything when there's a ExecError: server execution failed
+		os.Exit(err.ExitCode)
+	default:
+		fmt.Fprintf(os.Stderr, "%s: %v\n", text.FgRed.Sprintf("error"), err)
+		os.Exit(1)
 	}
 }

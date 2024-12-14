@@ -6,14 +6,14 @@ servers:
     local: true
 
   server-1:
-    host: server-1.lan
+    host: 172.24.2.2
     env:
       foo: foo
       hello: world
       release: v1.0.0
 
   pihole:
-    host: pihole.lan
+    host: 172.24.2.3
 
 env:
   foo: bar
@@ -74,25 +74,16 @@ tasks:
       all: true
     cmd: |
       echo "# SERVER"
-      echo "SAKE_SERVER_NAME $SAKE_SERVER_NAME"
-      echo "SAKE_SERVER_DESC $SAKE_SERVER_DESC"
-      echo "SAKE_SERVER_TAGS $SAKE_SERVER_TAGS"
-      echo "SAKE_SERVER_HOST $SAKE_SERVER_HOST"
-      echo "SAKE_SERVER_USER $SAKE_SERVER_USER"
-      echo "SAKE_SERVER_PORT $SAKE_SERVER_PORT"
-      echo "SAKE_SERVER_LOCAL $SAKE_SERVER_LOCAL"
+      echo "S_TAGS $S_TAGS"
+      echo "S_HOST $S_HOST"
+      echo "S_USER $S_USER"
+      echo "S_PORT $S_PORT"
 
       echo
       echo "# TASK"
-      echo "SAKE_TASK_ID $SAKE_TASK_ID"
-      echo "SAKE_TASK_NAME $SAKE_TASK_NAME"
-      echo "SAKE_TASK_DESC $SAKE_TASK_DESC"
-      echo "SAKE_TASK_LOCAL $SAKE_TASK_LOCAL"
 
       echo
       echo "# CONFIG"
       echo "SAKE_DIR $SAKE_DIR"
       echo "SAKE_PATH $SAKE_PATH"
-      echo "SAKE_IDENTITY_FILE $SAKE_IDENTITY_FILE"
-      echo "SAKE_PASSWORD $SAKE_PASSWOD"
       echo "SAKE_KNOWN_HOSTS_FILE $SAKE_KNOWN_HOSTS_FILE"

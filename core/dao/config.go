@@ -2,7 +2,6 @@ package dao
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +17,10 @@ import (
 var (
 	ACCEPTABLE_FILE_NAMES = []string{"sake.yaml", "sake.yml", ".sake.yaml", ".sake.yml"}
 
+	DEFAULT_SHELL = "bash -c"
+
+	DEFAULT_TIMEOUT = uint(20)
+
 	DEFAULT_THEME = Theme{
 		Name:  "default",
 		Table: DefaultTable,
@@ -29,22 +32,45 @@ var (
 		All:     false,
 		Servers: []string{},
 		Tags:    []string{},
+		Regex:   "",
+		Invert:  false,
+		Limit:   0,
+		LimitP:  0,
 	}
 
 	DEFAULT_SPEC = Spec{
 		Name:              "default",
+		Desc:              "the default spec",
+		Describe:          false,
+		ListHosts:         false,
+		Order:             "inventory",
+		Silent:            false,
+		Hidden:            false,
+		Strategy:          "linear",
+		Batch:             0,
+		BatchP:            0,
+		Forks:             10000,
 		Output:            "text",
-		Parallel:          false,
-		AnyErrorsFatal:    false,
-		IgnoreUnreachable: false,
+		MaxFailPercentage: 0,
+		AnyErrorsFatal:    true,
 		IgnoreErrors:      false,
-		OmitEmpty:         false,
+		IgnoreUnreachable: false,
+		OmitEmptyRows:     false,
+		OmitEmptyColumns:  false,
+		Report:            []string{"recap"},
+		Verbose:           false,
+		Confirm:           false,
+		Step:              false,
+		Print:             "all",
 	}
 )
 
 type Config struct {
+	SSHConfigFile     *string
+	DefaultTimeout    uint
 	DisableVerifyHost bool
 	KnownHostsFile    string
+	Shell             string
 	Envs              []string
 	Themes            []Theme
 	Specs             []Spec
@@ -62,7 +88,9 @@ type ConfigYAML struct {
 
 	// Intermediate
 	DisableVerifyHost *bool     `yaml:"disable_verify_host"`
+	DefaultTimeout    *uint     `yaml:"default_timeout"`
 	KnownHostsFile    *string   `yaml:"known_hosts_file"`
+	Shell             string    `yaml:"shell"`
 	Import            yaml.Node `yaml:"import"`
 	Env               yaml.Node `yaml:"env"`
 	Themes            yaml.Node `yaml:"themes"`
@@ -83,11 +111,19 @@ func (c *ConfigYAML) GetContextLine() int {
 }
 
 // Function to read sake configs.
-func ReadConfig(configFilepath string, userConfigPath string, noColor bool) (Config, error) {
+func ReadConfig(configFilepath string, userConfigPath string, sshConfigFile string, noColor bool) (Config, error) {
 	CheckUserNoColor(noColor)
 	var configPath string
 
-	userConfigFile := getUserConfigFile(userConfigPath)
+	userConfigFile, err := getUserConfigFile(userConfigPath)
+	if err != nil {
+		return Config{}, err
+	}
+
+	sshConfigPath, err := getSSHConfigPath(sshConfigFile)
+	if err != nil {
+		return Config{}, err
+	}
 
 	// Try to find config file in current directory and all parents
 	if configFilepath != "" {
@@ -124,7 +160,7 @@ func ReadConfig(configFilepath string, userConfigPath string, noColor bool) (Con
 		configPath = filename
 	}
 
-	dat, err := ioutil.ReadFile(configPath)
+	dat, err := os.ReadFile(configPath)
 	if err != nil {
 		return Config{}, err
 	}
@@ -143,6 +179,7 @@ func ReadConfig(configFilepath string, userConfigPath string, noColor bool) (Con
 	}
 
 	config, configErr := configYAML.parseConfig()
+	config.SSHConfigFile = sshConfigPath
 	config.CheckConfigNoColor()
 
 	if configErr != nil {
@@ -152,32 +189,75 @@ func ReadConfig(configFilepath string, userConfigPath string, noColor bool) (Con
 	return config, nil
 }
 
-func getUserConfigFile(userConfigPath string) *string {
+func getUserConfigFile(userConfigPath string) (*string, error) {
 	// Flag
 	if userConfigPath != "" {
-		if _, err := os.Stat(userConfigPath); err == nil {
-			return &userConfigPath
+		if _, err := os.Stat(userConfigPath); err != nil {
+			return nil, fmt.Errorf("user config not found: %w", err)
 		}
+		return &userConfigPath, nil
 	}
 
 	// Env
 	val, present := os.LookupEnv("SAKE_USER_CONFIG")
 	if present {
-		return &val
+		if _, err := os.Stat(val); err != nil {
+			return nil, fmt.Errorf("user config not found: %w", err)
+		}
+		return &val, nil
 	}
 
 	// Default
 	defaultUserConfigDir, _ := os.UserConfigDir()
+
 	defaultUserConfigPath := filepath.Join(defaultUserConfigDir, "sake", "config.yaml")
 	if _, err := os.Stat(defaultUserConfigPath); err == nil {
-		return &defaultUserConfigPath
+		return &defaultUserConfigPath, nil
 	}
 
-	return nil
+	defaultUserConfigPath = filepath.Join(defaultUserConfigDir, "sake", "config.yml")
+	if _, err := os.Stat(defaultUserConfigPath); err == nil {
+		return &defaultUserConfigPath, nil
+	}
+
+	return nil, nil
+}
+
+func getSSHConfigPath(sshConfigPath string) (*string, error) {
+	// Flag
+	if sshConfigPath != "" {
+		if _, err := os.Stat(sshConfigPath); err == nil {
+			return &sshConfigPath, nil
+		} else {
+			return &sshConfigPath, err
+		}
+	}
+
+	// Env
+	val, present := os.LookupEnv("SAKE_SSH_CONFIG")
+	if present {
+		return &val, nil
+	}
+
+	// User SSH config
+	if home, err := os.UserHomeDir(); err == nil {
+		userSSHConfigFile := filepath.Join(home, ".ssh", "config")
+		if _, err := os.Stat(userSSHConfigFile); err == nil {
+			return &userSSHConfigFile, nil
+		}
+	}
+
+	// Global SSH config
+	globalSSHConfig := "/etc/ssh/ssh_config"
+	if _, err := os.Stat(globalSSHConfig); err == nil {
+		return &globalSSHConfig, nil
+	}
+
+	return nil, nil
 }
 
 // Open sake config in editor
-func (c Config) EditConfig() error {
+func (c *Config) EditConfig() error {
 	return openEditor(c.Path, -1)
 }
 
@@ -191,6 +271,8 @@ func openEditor(path string, lineNr int) error {
 
 	if lineNr > 0 {
 		switch editor {
+		case "nvim":
+			args = []string{fmt.Sprintf("+%v", lineNr), path}
 		case "vim":
 			args = []string{fmt.Sprintf("+%v", lineNr), path}
 		case "vi":
@@ -236,7 +318,7 @@ func openEditor(path string, lineNr int) error {
 }
 
 // Open sake config in editor and optionally go to line matching the task name
-func (c Config) EditTask(name string) error {
+func (c *Config) EditTask(name string) error {
 	configPath := c.Path
 	if name != "" {
 		task, err := c.GetTask(name)
@@ -246,7 +328,7 @@ func (c Config) EditTask(name string) error {
 		configPath = task.context
 	}
 
-	dat, err := ioutil.ReadFile(configPath)
+	dat, err := os.ReadFile(configPath)
 	if err != nil {
 		return err
 	}
@@ -277,17 +359,19 @@ func (c Config) EditTask(name string) error {
 }
 
 // Open sake config in editor and optionally go to line matching the server name
-func (c Config) EditServer(name string) error {
+func (c *Config) EditServer(name string) error {
+	var group string
 	configPath := c.Path
 	if name != "" {
-		server, err := c.GetServer(name)
+		server, err := c.GetServerByGroup(name)
 		if err != nil {
 			return err
 		}
+		group = server.Group
 		configPath = server.context
 	}
 
-	dat, err := ioutil.ReadFile(configPath)
+	dat, err := os.ReadFile(configPath)
 	if err != nil {
 		return err
 	}
@@ -307,8 +391,90 @@ func (c Config) EditServer(name string) error {
 		lineNr = configTmp.Servers.Line - 1
 	} else {
 		for _, server := range configTmp.Servers.Content {
-			if server.Value == name {
+			if server.Value == group {
 				lineNr = server.Line
+				break
+			}
+		}
+	}
+
+	return openEditor(configPath, lineNr)
+}
+
+// Open sake config in editor and optionally go to line matching the target name
+func (c *Config) EditTarget(name string) error {
+	configPath := c.Path
+	if name != "" {
+		target, err := c.GetTarget(name)
+		if err != nil {
+			return err
+		}
+		configPath = target.context
+	}
+
+	dat, err := os.ReadFile(configPath)
+	if err != nil {
+		return err
+	}
+
+	type ConfigTmp struct {
+		Targets yaml.Node
+	}
+
+	var configTmp ConfigTmp
+	err = yaml.Unmarshal(dat, &configTmp)
+	if err != nil {
+		return err
+	}
+
+	lineNr := 0
+	if name == "" {
+		lineNr = configTmp.Targets.Line - 1
+	} else {
+		for _, target := range configTmp.Targets.Content {
+			if target.Value == name {
+				lineNr = target.Line
+				break
+			}
+		}
+	}
+
+	return openEditor(configPath, lineNr)
+}
+
+// Open sake config in editor and optionally go to line matching the spec name
+func (c *Config) EditSpec(name string) error {
+	configPath := c.Path
+	if name != "" {
+		spec, err := c.GetSpec(name)
+		if err != nil {
+			return err
+		}
+		configPath = spec.context
+	}
+
+	dat, err := os.ReadFile(configPath)
+	if err != nil {
+		return err
+	}
+
+	type ConfigTmp struct {
+		Specs yaml.Node
+	}
+
+	var configTmp ConfigTmp
+	err = yaml.Unmarshal(dat, &configTmp)
+	if err != nil {
+		return err
+	}
+
+	lineNr := 0
+	if name == "" {
+		lineNr = configTmp.Specs.Line - 1
+	} else {
+		for _, spec := range configTmp.Specs.Content {
+			if spec.Value == name {
+				lineNr = spec.Line
 				break
 			}
 		}
@@ -396,6 +562,44 @@ tasks:
 	fmt.Println("- Created sake.yaml")
 
 	return servers, nil
+}
+
+func (c *Config) ParseInventory(userArgs []string) error {
+	var servers []Server
+	var shell = DEFAULT_SHELL
+	if c.Shell != "" {
+		shell = c.Shell
+	}
+	shell = core.FormatShell(shell)
+
+	for _, s := range c.Servers {
+		if s.Inventory != "" {
+			hosts, err := core.EvaluateInventory(shell, s.context, s.Inventory, s.Envs, userArgs)
+			if err != nil {
+				return err
+			}
+
+			if len(hosts) == 0 {
+				return fmt.Errorf("inventory %s returned 0 hosts", s.Name)
+			}
+
+			for i, host := range hosts {
+				server, err := CreateInventoryServers(host, i, s, userArgs)
+				if err != nil {
+					return err
+				}
+
+				servers = append(servers, server)
+			}
+
+		} else {
+			servers = append(servers, s)
+		}
+	}
+
+	c.Servers = servers
+
+	return nil
 }
 
 func CheckUserNoColor(noColorFlag bool) {

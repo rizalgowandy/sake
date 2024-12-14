@@ -8,7 +8,20 @@ type ListFlags struct {
 }
 
 type ServerFlags struct {
-	Tags    []string
+	Tags       []string
+	Headers    []string
+	Edit       bool
+	Regex      string
+	Invert     bool
+	AllHeaders bool
+}
+
+type TargetFlags struct {
+	Headers []string
+	Edit    bool
+}
+
+type SpecFlags struct {
 	Headers []string
 	Edit    bool
 }
@@ -18,22 +31,36 @@ type TagFlags struct {
 }
 
 type TaskFlags struct {
-	Headers []string
-	Edit    bool
+	Headers    []string
+	Edit       bool
+	AllHeaders bool
 }
 
 type RunFlags struct {
 	// Flags
-	Edit     bool
-	DryRun   bool
-	Describe bool
-	Debug    bool
+	Edit      bool
+	DryRun    bool
+	Describe  bool
+	ListHosts bool
+	Silent    bool
+	Confirm   bool
+	Step      bool
+	Verbose   bool
+
+	// Reports
+	Report []string
 
 	// Target
 	All     bool
+	Regex   string
 	Servers []string
 	Tags    []string
 	Cwd     bool
+	Invert  bool
+	Limit   uint32
+	LimitP  uint8
+	Target  string
+	Order   string
 
 	// Config
 	KnownHostsFile string
@@ -46,22 +73,51 @@ type RunFlags struct {
 
 	// Server
 	IdentityFile string
+	User         string
 	Password     string
 
 	// Spec
-	Parallel          bool
+	Spec              string
 	AnyErrorsFatal    bool
+	MaxFailPercentage uint8
 	IgnoreErrors      bool
 	IgnoreUnreachable bool
-	OmitEmpty         bool
+	OmitEmptyRows     bool
+	OmitEmptyColumns  bool
+	Forks             uint32
+	Batch             uint32
+	BatchP            uint8
 	Output            string
+	Print             string
+	Strategy          string
 }
 
 type SetRunFlags struct {
-	Parallel          bool
-	OmitEmpty         bool
+	Silent            bool
+	Describe          bool
+	ListHosts         bool
+	Attach            bool
+	All               bool
+	Invert            bool
+	OmitEmptyRows     bool
+	OmitEmptyColumns  bool
 	Local             bool
+	TTY               bool
 	AnyErrorsFatal    bool
 	IgnoreErrors      bool
 	IgnoreUnreachable bool
+	Order             bool
+	Report            bool
+	Forks             bool
+	Batch             bool
+	BatchP            bool
+	Servers           bool
+	Tags              bool
+	Regex             bool
+	Limit             bool
+	LimitP            bool
+	Verbose           bool
+	Confirm           bool
+	Step              bool
+	MaxFailPercentage bool
 }

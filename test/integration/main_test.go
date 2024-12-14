@@ -3,10 +3,9 @@ package integration
 import (
 	"flag"
 	"fmt"
-	"strings"
 	"log"
+	"strings"
 
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -18,7 +17,6 @@ import (
 	"github.com/kr/pretty"
 )
 
-
 var tmpDir = "../tmp/"
 
 var debug = flag.Bool("debug", false, "debug")
@@ -26,11 +24,22 @@ var update = flag.Bool("update", false, "update golden files")
 var clean = flag.Bool("clean", false, "Clean tmp directory after run")
 
 type TemplateTest struct {
-	TestName   string
-	TestCmd    string
-	Golden     string
-	Ignore     bool
-	WantErr    bool
+	TestName string
+	TestCmd  string
+	Golden   string
+	Ignore   bool
+	WantErr  bool
+	Index    int
+}
+
+func (tt TemplateTest) GoldenOutput(output []byte) []byte {
+	out := string(output)
+	golden := fmt.Sprintf(
+		"Index: %d\nName: %s\nCmd: %s\nWantErr: %t\n\n---\n%s",
+		tt.Index, tt.TestName, tt.TestCmd, tt.WantErr, out,
+	)
+
+	return []byte(golden)
 }
 
 func clearGolden(file string) {
@@ -41,7 +50,7 @@ func clearGolden(file string) {
 }
 
 func clearTmp() {
-	files, _ := ioutil.ReadDir(".")
+	files, _ := os.ReadDir(".")
 	for _, f := range files {
 		filepath := path.Join(tmpDir, f.Name())
 		os.Remove(filepath)
@@ -72,6 +81,7 @@ func TestMain(m *testing.M) {
 }
 
 func Run(t *testing.T, tt TemplateTest) {
+	var err error
 	log.SetFlags(0)
 	// var goldenFile = filepath.Join(tmpDir, tt.Golden)
 	if _, err := os.Stat(tt.Golden); os.IsNotExist(err) {
@@ -80,12 +90,6 @@ func Run(t *testing.T, tt TemplateTest) {
 			t.Fatalf("could not create golden file at %s: %v", tt.Golden, err)
 		}
 	}
-
-	t.Cleanup(func() {
-		if *clean {
-			clearTmp()
-		}
-	})
 
 	// Run test command
 	cmd := exec.Command("bash", "-c", tt.TestCmd)
@@ -105,7 +109,7 @@ func Run(t *testing.T, tt TemplateTest) {
 	}
 
 	// Write output to tmp file which will be used to compare with golden files
-	err = ioutil.WriteFile(tt.Golden, output, 0644)
+	err = os.WriteFile(tt.Golden, tt.GoldenOutput(output), 0644)
 	if err != nil {
 		t.Fatalf("could not write %s: %v", tt.Golden, err)
 	}
@@ -115,17 +119,17 @@ func Run(t *testing.T, tt TemplateTest) {
 		clearGolden(goldenFilePath)
 
 		// Write stdout of test command to golden file
-		err = ioutil.WriteFile(goldenFilePath, output, os.ModePerm)
+		err = os.WriteFile(goldenFilePath, tt.GoldenOutput(output), os.ModePerm)
 		if err != nil {
 			t.Fatalf("could not write %s: %v", goldenFilePath, err)
 		}
 	} else {
-		actual, err := ioutil.ReadFile(tt.Golden)
+		actual, err := os.ReadFile(tt.Golden)
 		if err != nil {
 			t.Fatalf("Error: %v", err)
 		}
 
-		expected, err := ioutil.ReadFile(goldenFilePath)
+		expected, err := os.ReadFile(goldenFilePath)
 		if err != nil {
 			t.Fatalf("Error: %v", err)
 		}
@@ -143,12 +147,17 @@ func Run(t *testing.T, tt TemplateTest) {
 			fmt.Println(string(actual))
 			fmt.Println("--------------------->")
 
-			t.Fatalf("\nfile: %v\ndiff: %v", text.FgBlue.Sprintf(goldenFilePath), diff(expected, actual))
+			t.Fatalf("\nfile: %v\ndiff: %v", text.FgBlue.Sprint(goldenFilePath), diff(expected, actual))
 		}
 
 		if err != nil {
 			t.Fatalf("Error: %v", err)
 		}
 	}
-}
 
+	t.Cleanup(func() {
+		if *clean && err == nil {
+			clearGolden(tt.Golden)
+		}
+	})
+}
